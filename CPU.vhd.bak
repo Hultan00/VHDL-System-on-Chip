@@ -1,0 +1,273 @@
+library IEEE;
+use IEEE.std_logic_1164.all;
+use ieee.numeric_std.all;
+use work.CPU_Package.all;
+use work.all;
+
+ENTITY CPU is 
+  PORT( adr : OUT address_bus;
+      instr : IN instruction_bus; 
+      data : INOUT data_bus; 
+      rw : OUT std_logic; -- read on high, write on low 
+      ROM_en : OUT std_logic; -- active low 
+      RWM_en : OUT std_logic; -- active low 
+      IO_en : OUT std_logic;
+      OUT_en : OUT std_logic;
+      clk : IN std_logic; 
+      reset : IN std_logic
+      ); -- active high 
+END ENTITY CPU; 
+
+ARCHITECTURE RTL OF CPU IS
+    --CPU--
+    signal CLK_CPU : std_logic;
+    
+    
+    --ALU--
+    COMPONENT ALU
+      PORT(
+        Op : IN std_logic_vector(2 downto 0);
+        A : IN data_word;
+        B : IN data_word;
+        En : IN std_logic;
+        clk : IN std_logic;
+        y : OUT data_word;
+        n_flag: OUT std_logic;
+        z_flag: OUT std_logic;
+        o_flag: OUT std_logic
+        );
+    END COMPONENT;
+
+    signal OP_ALU : std_logic_vector(2 downto 0);
+    signal A_ALU : data_word;
+    signal B_ALU : data_word;
+    signal EN_ALU : std_logic;
+    --CLK
+    signal Y_ALU : data_word;
+    signal N_FLAG_ALU : std_logic;
+    signal Z_FLAG_ALU : std_logic;
+    signal O_FLAG_ALU : std_logic;
+    
+    --Register--
+    COMPONENT REGISTERFILE
+      PORT(
+        clk : IN std_logic; 
+        data_in : IN data_word; 
+        data_out_1 : OUT data_word; 
+        data_out_0 : OUT data_word; 
+        sel_in : IN std_logic_vector (1 downto 0);   
+        sel_out_1 : IN std_logic_vector (1 downto 0);   
+        sel_out_0 : IN std_logic_vector (1 downto 0);  
+        rw_reg : in std_logic
+        );
+    END COMPONENT;
+    
+    --CLK
+    signal DATA_IN_REG : data_word;
+    signal DATA_OUT_1_REG : data_word;
+    signal DATA_OUT_0_REG : data_word;
+    signal SEL_IN_REG : std_logic_vector(1 downto 0);
+    signal SEL_OUT_1_REG : std_logic_vector(1 downto 0);
+    signal SEL_OUT_0_REG : std_logic_vector(1 downto 0);
+    signal RW_REG_REG : std_logic;
+    
+    
+    --Controller--
+    COMPONENT CONTROLLER
+      PORT (
+        adr : OUT address_bus; -- unsigned
+        data : IN program_word; -- unsigned
+        RW : OUT std_logic; -- read on high, write on low
+        RWM_en : OUT std_logic; -- active low
+        ROM_en : OUT std_logic; -- active low
+        IO_en : OUT std_logic; -- active high
+        clk : IN std_logic; 
+        reset : IN std_logic; -- active high
+        sel_op_1 : OUT std_logic_vector (1 downto 0); 
+        sel_op_0 : OUT std_logic_vector (1 downto 0);
+        sel_in : OUT std_logic_vector (1 downto 0);
+        rw_reg : OUT std_logic; -- write on low, read on high
+        sel_mux : OUT std_logic_vector (1 downto 0);
+        alu_op : OUT std_logic_vector (2 downto 0);
+        alu_en : OUT std_logic; -- active high 
+        z_flag : IN std_logic; -- active high 
+        n_flag : IN std_logic; -- active high 
+        o_flag : IN std_logic; -- active high
+        out_en : OUT std_logic; -- active high
+        data_imm : OUT data_word;
+        out_en_ob : OUT std_logic
+        );
+    END COMPONENT;
+    
+    signal ADR_CO : address_bus;
+    signal DATA_CO : program_word;
+    signal RW_CO : std_logic;
+    signal RWM_EN_CO : std_logic;
+    signal ROM_EN_CO : std_logic;
+    signal IO_EN_CO : std_logic;
+    --CLK
+    signal RESET_CO : std_logic;
+    signal SEL_OP_1_CO : std_logic_vector (1 downto 0);
+    signal SEL_OP_0_CO : std_logic_vector (1 downto 0);
+    signal SEL_IN_CO : std_logic_vector (1 downto 0);
+    signal RW_REG_CO : std_logic;
+    signal SEL_MUX_CO : std_logic_vector (1 downto 0);
+    signal ALU_OP_CO : std_logic_vector (2 downto 0);
+    signal ALU_EN_CO : std_logic;
+    signal Z_FLAG_CO : std_logic;
+    signal N_FLAG_CO : std_logic;
+    signal O_FLAG_CO : std_logic;
+    signal OUT_EN_CO : std_logic;
+    signal DATA_IMM_CO : data_word;
+    signal OUT_EN_OB_CO : std_logic;
+    
+    
+    --Multiplexer--
+    COMPONENT Multiplexer
+      PORT (
+        Sel : IN std_logic_vector(1 downto 0);
+        Data_in_3: IN data_word;  
+        Data_in_2 : IN data_word;  
+        Data_in_1 : IN data_bus; -- Potential type problem...  
+        Data_in_0 : IN data_word;  
+        Data_out : OUT data_word
+        );
+    END COMPONENT;
+    
+    signal SEL_MUX : std_logic_vector(1 downto 0);
+    signal DATA_IN_0_MUX : data_word;
+    signal DATA_IN_1_MUX : data_bus;
+    signal DATA_IN_2_MUX : data_word;
+    signal DATA_IN_3_MUX : data_word;
+    signal DATA_OUT_MUX : data_word;
+    
+    
+    --Buffer--
+    COMPONENT DataBuffert
+      PORT (
+        out_en : IN std_logic;
+        data_in : IN data_word;
+        data_out : OUT data_bus
+        );
+    END COMPONENT;
+    
+    signal OUT_EN_BUF : std_logic;
+    signal DATA_IN_BUF : data_word;
+    signal DATA_OUT_BUF : data_bus;
+    
+
+    -- Other signals and component instances go here
+
+BEGIN
+    -- Instantiate and connect the Controller
+    Controller_comp : Controller
+        PORT MAP (
+            adr => ADR_CO,
+            data => DATA_CO,
+            RW => RW_CO,
+            RWM_en => RWM_EN_CO,
+            ROM_en => ROM_EN_CO,
+            IO_en => IO_EN_CO,
+            clk => CLK_CPU,
+            reset => RESET_CO,
+            sel_op_1 => SEL_OP_1_CO,
+            sel_op_0 => SEL_OP_0_CO,
+            sel_in => SEL_IN_CO,
+            rw_reg => RW_REG_CO,
+            sel_mux => SEL_MUX_CO,
+            alu_op => ALU_OP_CO,
+            alu_en => ALU_EN_CO,
+            z_flag => Z_FLAG_CO,
+            n_flag => N_FLAG_CO,
+            o_flag => O_FLAG_CO,
+            out_en => OUT_EN_CO,
+            data_imm => DATA_IMM_CO,
+            out_en_ob => OUT_EN_OB_CO
+        );
+
+    -- Instantiate and connect the Buffert
+    Buffert_comp : DataBuffert
+        PORT MAP (
+            out_en => OUT_EN_BUF,
+            data_in => DATA_IN_BUF,
+            data_out => DATA_OUT_BUF
+        );
+
+    -- Instantiate and connect the Mux
+    Mux_comp : Multiplexer
+        PORT MAP (
+            Sel => SEL_MUX,
+            Data_in_3 => DATA_IN_2_MUX,
+            Data_in_2 => DATA_IN_2_MUX,
+            Data_in_1 => DATA_IN_1_MUX,
+            Data_in_0 => DATA_IN_0_MUX,  -- Connect Mux output to Mux_Data_Out
+            Data_out => DATA_OUT_MUX
+        );
+
+    -- Instantiate and connect the ALU
+    ALU_comp : ALU
+        PORT MAP (
+            Op => OP_ALU,
+            A => A_ALU,
+            B => B_ALU,
+            En => EN_ALU,
+            clk => CLK_CPU,
+            y => Y_ALU,
+            n_flag => N_FLAG_ALU,
+            z_flag => Z_FLAG_ALU,
+            o_flag => O_FLAG_ALU
+        );
+
+    -- Instantiate and connect the Register
+    Register_comp : RegisterFile
+        PORT MAP (
+            clk => CLK_CPU,
+            data_in => DATA_IN_REG,  -- Connect Register input to Mux_Data_Out
+            data_out_1 => DATA_OUT_1_REG,
+            data_out_0 => DATA_OUT_0_REG,
+            sel_in => SEL_IN_REG,
+            sel_out_1 => SEL_OUT_1_REG,
+            sel_out_0 => SEL_OUT_0_REG,
+            rw_reg => RW_REG_REG
+        );
+
+    -- Other connections between components as needed
+
+      adr <= ADR_CO;
+      DATA_CO <= instr;
+      rw <= RW_CO;
+      ROM_en <= ROM_EN_CO;
+      RWM_en <= RWM_EN_CO;
+      IO_en <= IO_EN_CO;
+      OUT_en <= OUT_EN_OB_CO;
+      CLK_CPU <= clk;
+      RESET_CO <= reset;
+      
+      RW_REG_REG <= RW_REG_CO;
+      SEL_OUT_1_REG <= SEL_OP_1_CO;
+      SEL_OUT_0_REG <= SEL_OP_0_CO;
+      SEL_IN_REG <= SEL_IN_CO;
+      SEL_MUX <= SEL_MUX_CO;
+      DATA_IN_2_MUX <= DATA_IMM_CO;
+      OP_ALU <= ALU_OP_CO;
+      EN_ALU <= ALU_EN_CO;
+      OUT_EN_BUF <= OUT_EN_CO;
+      Z_FLAG_CO <= Z_FLAG_ALU;
+      N_FLAG_CO <= N_FLAG_ALU;
+      O_FLAG_CO <= O_FLAG_ALU;
+      
+      A_ALU <= DATA_OUT_1_REG;
+      B_ALU <= DATA_OUT_0_REG;
+      
+      DATA_IN_0_MUX <= Y_ALU;
+      
+      DATA_IN_REG <= DATA_OUT_MUX;
+      
+      DATA_IN_BUF <= DATA_OUT_1_REG;
+      
+      data <= DATA_OUT_BUF when OUT_EN_BUF = '1' else (others => 'Z');
+      DATA_IN_1_MUX <= data when OUT_EN_BUF = '0'; 
+      
+END RTL;
+
+

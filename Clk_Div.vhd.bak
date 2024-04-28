@@ -1,0 +1,40 @@
+library IEEE;
+use IEEE.std_logic_1164.all;
+use IEEE.numeric_std.all;
+
+entity ClockDivider is
+    Port (
+        ext_clk : in std_logic;  -- Input clock (too fast)
+        stop : in std_logic;     -- Stop signal (active low)
+        clk : out std_logic      -- Output 1 Hz clock
+    );
+end entity ClockDivider;
+
+architecture Behavioral of ClockDivider is
+    signal counter : natural := 0;
+    signal clk_divided : std_logic := '0';
+
+    constant DIVIDER_VALUE : natural := 50;  -- For a 50 MHz input clock 25000000
+
+begin
+    process (ext_clk, stop)
+    begin
+        if stop = '0' then  -- Check if stop signal is active low
+            if rising_edge(ext_clk) then
+                if counter = DIVIDER_VALUE - 1 then
+                    clk_divided <= not clk_divided;  -- Invert the clock for division
+                    counter <= 0;
+                else
+                    counter <= counter + 1;
+                end if;
+            end if;
+        else
+            clk_divided <= '0';  -- Ensure clock is low when stopped
+            counter <= 0;
+        end if;
+    end process;
+
+    clk <= clk_divided;
+
+end architecture Behavioral;
+

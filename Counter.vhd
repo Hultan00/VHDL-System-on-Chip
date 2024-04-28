@@ -1,0 +1,53 @@
+library IEEE;
+use IEEE.std_logic_1164.all;
+use ieee.numeric_std.all;
+use work.CPU_Package.all;
+
+ENTITY Counter IS
+  PORT (clk : IN std_logic;
+        step : IN std_logic;
+        display : OUT std_logic_vector(6 downto 0));
+END ENTITY Counter;
+
+ARCHITECTURE RTL OF Counter IS
+  type seven_seg_display is array (0 to 15) of std_logic_vector(6 downto 0);
+  subtype counter_bitvector is std_logic_vector(3 downto 0);
+  constant template: seven_seg_display :=
+  (
+      "1111110", -- 0
+      "0110000", -- 1
+      "1101101", -- 2
+      "1111001", -- 3
+      "0110011", -- 4
+      "1011011", -- 5
+      "1011111", -- 6
+      "1110000", -- 7
+      "1111111", -- 8
+      "1111011", -- 9
+      "1110111", -- A
+      "0011111", -- b
+      "1001110", -- C
+      "0111101", -- d
+      "1001111", -- E
+      "1000111"  -- F
+  );
+  signal count: counter_bitvector := "0000";
+  signal one: counter_bitvector := "0001";
+  signal prev_step: std_logic := '0';  -- to detect a change in 'step'
+
+begin
+  clock: process(clk)
+  begin
+    if rising_edge(clk) then
+      if step /= prev_step then  -- Detect a change in 'step'
+        if count = "1111" then
+          count <= "0000";
+        else
+          count <= std_logic_vector(unsigned(count) + unsigned(one));
+        end if;
+      end if;
+      prev_step <= step;  -- Store the current 'step' for the next iteration
+      display <= template(to_integer(unsigned(count)));
+    end if;
+  end process clock;
+end RTL;

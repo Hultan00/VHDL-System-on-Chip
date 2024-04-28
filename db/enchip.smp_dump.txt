@@ -1,0 +1,11 @@
+
+State Machine - |Enchip|CPU:C3|Controller:Controller_comp|State
+Name State.Load_Immidiate State.Store_data State.Load_Data State.Write_Result State.Decode_Instruction State.Load_Instruction State.Fetch_Instruction State.Controller_Reset 
+State.Controller_Reset 0 0 0 0 0 0 0 0 
+State.Fetch_Instruction 0 0 0 0 0 0 1 1 
+State.Load_Instruction 0 0 0 0 0 1 0 1 
+State.Decode_Instruction 0 0 0 0 1 0 0 1 
+State.Write_Result 0 0 0 1 0 0 0 1 
+State.Load_Data 0 0 1 0 0 0 0 1 
+State.Store_data 0 1 0 0 0 0 0 1 
+State.Load_Immidiate 1 0 0 0 0 0 0 1 
